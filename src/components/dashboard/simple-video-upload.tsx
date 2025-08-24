@@ -11,7 +11,7 @@ interface SimpleVideoUploadProps {
     meeting_id: string;
     drive_share_link: string;
     original_filename: string;
-    uploaded_by: string;
+    uploaded_by?: string;
   }) => void;
   setIsUploading?: (v: boolean) => void;
   setUploadProgress?: (v: number) => void;
@@ -117,7 +117,6 @@ export function SimpleVideoUpload({
             const videoData = {
               meeting_id: meetingId,
               original_filename: selectedFile.name,
-              uploaded_by: "system", // Use a default value since we don't have user context
               drive_share_link: status.drive_share_link
             };
 

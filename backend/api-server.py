@@ -66,8 +66,11 @@ def save_file_to_supabase(meeting_id, drive_file_id, original_filename, uploaded
             "drive_share_link": drive_share_link,
             "original_filename": original_filename,
             "uploaded_at": datetime.now().isoformat(),
-            "uploaded_by": uploaded_by
         }
+        
+        # Only add uploaded_by if it's provided
+        if uploaded_by:
+            data["uploaded_by"] = uploaded_by
         
         logger.debug(f"Preparing to save data to Supabase: {data}")
         
@@ -1836,8 +1839,7 @@ def upload_drive_file_with_progress():
                 supabase_success = save_file_to_supabase(
                     meeting_id=meeting_id,
                     drive_file_id=drive_file_id,
-                    original_filename=filename,
-                    uploaded_by=None  # Can be updated to include user ID if available
+                    original_filename=filename
                 )
                 if supabase_success:
                     logger.info(f"Successfully saved file info to Supabase for meeting {meeting_id}")

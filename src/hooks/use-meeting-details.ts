@@ -66,7 +66,7 @@ export function useMeetingDetails(meetingId: string) {
       meeting_id: string;
       drive_share_link: string;
       original_filename: string;
-      uploaded_by: string;
+      uploaded_by?: string;
     }) => {
       const { data, error } = await supabase
         .from("meeting_videos")
