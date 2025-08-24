@@ -4,9 +4,7 @@ export const config = {
   EMAIL_PASSWORD: "wwps nqlk mqky bgwj",
   EMAIL_USER: "theobserver.ai@gmail.com",
   
-  // API Keys
-  ASSEMBLYAI_API_KEY: "4dcdddf89c614a81b2364bbfa12c9c68",
-  GEMINI_API_KEY: "AIzaSyCM8TXDuEvULQJdFkiLP_AjK-CAfF-Sivw",
+
   
   // Supabase Configuration (from existing client)
   SUPABASE_URL: "https://ryftlmknvgxodnxkilzg.supabase.co",
