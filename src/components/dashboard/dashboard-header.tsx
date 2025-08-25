@@ -47,9 +47,13 @@ export function DashboardHeader({ user, onLogout, searchQuery = "", onSearchChan
   };
 
   const handleGoogleDriveAuth = async () => {
+    console.log('Starting Google Drive auth...');
     setIsLoading(true);
     try {
+      console.log('Calling GoogleDriveAuthService.initiateAuth()...');
       const result = await GoogleDriveAuthService.initiateAuth();
+      console.log('Auth result:', result);
+      
       if (result.success) {
         toast({
           title: "Authorization Started",
@@ -61,6 +65,7 @@ export function DashboardHeader({ user, onLogout, searchQuery = "", onSearchChan
           await checkAuthStatus();
         }, 3000);
       } else {
+        console.error('Auth failed:', result.error);
         toast({
           title: "Authorization Failed",
           description: result.error || "Failed to start authorization",
@@ -68,12 +73,14 @@ export function DashboardHeader({ user, onLogout, searchQuery = "", onSearchChan
         });
       }
     } catch (error) {
+      console.error('Auth error:', error);
       toast({
         title: "Error",
         description: "Failed to initiate Google Drive authorization",
         variant: "destructive",
       });
     } finally {
+      console.log('Setting loading to false');
       setIsLoading(false);
     }
   };

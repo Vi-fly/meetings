@@ -37,8 +37,21 @@ export class GoogleDriveAuthService {
    */
   static async initiateAuth(): Promise<GoogleDriveAuthResponse> {
     try {
+      console.log('Initiating Google Drive auth, calling:', API_ENDPOINTS.googleDriveAuth);
       const response = await fetch(API_ENDPOINTS.googleDriveAuth);
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      if (!response.ok) {
+        console.error('Response not ok:', response.status, response.statusText);
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${response.statusText}`
+        };
+      }
+      
       const data = await response.json();
+      console.log('Response data:', data);
       
       if (data.success && data.auth_url) {
         // Open the auth URL in a new window
