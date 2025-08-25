@@ -24,7 +24,7 @@ import copy
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-from google_auth_oauthlib.flow import Flow
+from google_auth_oauthlib.flow import InstalledAppFlow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 import logging
@@ -2014,9 +2014,9 @@ def google_drive_auth():
             }), 500
         
         # Create OAuth flow for web application
-        flow = Flow.from_client_config(
+        flow = InstalledAppFlow.from_client_config(
             {
-                "web": {
+                "installed": {
                     "client_id": GDRIVE_CLIENT_ID,
                     "client_secret": GDRIVE_CLIENT_SECRET,
                     "redirect_uris": [GDRIVE_REDIRECT_URI],
@@ -2024,8 +2024,7 @@ def google_drive_auth():
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
             },
-            SCOPES,
-            redirect_uri=GDRIVE_REDIRECT_URI
+            SCOPES
         )
         
         # Generate authorization URL
@@ -2033,6 +2032,15 @@ def google_drive_auth():
             access_type='offline',
             prompt='consent'
         )
+        
+        # Manually add redirect_uri if it's missing
+        logger.info(f"Generated auth URL: {auth_url}")
+        logger.info(f"Contains redirect_uri: {'redirect_uri=' in auth_url}")
+        if 'redirect_uri=' not in auth_url:
+            import urllib.parse
+            encoded_redirect_uri = urllib.parse.quote(GDRIVE_REDIRECT_URI, safe='')
+            auth_url += f'&redirect_uri={encoded_redirect_uri}'
+            logger.info(f"Added redirect_uri, new URL: {auth_url}")
         
         return jsonify({
             'success': True,
@@ -2067,9 +2075,9 @@ def google_drive_callback():
             }), 400
         
         # Create OAuth flow for web application
-        flow = Flow.from_client_config(
+        flow = InstalledAppFlow.from_client_config(
             {
-                "web": {
+                "installed": {
                     "client_id": GDRIVE_CLIENT_ID,
                     "client_secret": GDRIVE_CLIENT_SECRET,
                     "redirect_uris": [GDRIVE_REDIRECT_URI],
@@ -2077,8 +2085,7 @@ def google_drive_callback():
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
             },
-            SCOPES,
-            redirect_uri=GDRIVE_REDIRECT_URI
+            SCOPES
         )
         
         # Exchange code for tokens
