@@ -24,7 +24,7 @@ import copy
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 import logging
@@ -321,38 +321,14 @@ def get_authenticated_client():
                     f"Token refresh failed: {e}. A new authorization is required.")
                 
                 
-                flow = InstalledAppFlow.from_client_config(
-                    {
-                        "installed": {
-                            "client_id": GDRIVE_CLIENT_ID,
-                            "client_secret": GDRIVE_CLIENT_SECRET,
-                            "redirect_uris": [GDRIVE_REDIRECT_URI],
-                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                            "token_uri": "https://oauth2.googleapis.com/token"
-                        }
-                    },
-                    SCOPES
-                )
-
-                creds = flow.run_local_server(port=9000)
+                # For web applications, we need to handle OAuth through the web flow
+                # This function should not be called directly for web OAuth
+                raise Exception("Web OAuth flow should be handled through /auth/google-drive endpoint")
         else:
 
-            flow = InstalledAppFlow.from_client_config(
-                {
-                    "installed": {
-                        "client_id": GDRIVE_CLIENT_ID,
-                        "client_secret": GDRIVE_CLIENT_SECRET,
-                        "redirect_uris": [GDRIVE_REDIRECT_URI],
-                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                        "token_uri": "https://oauth2.googleapis.com/token"
-                    }
-                },
-                SCOPES
-            )
-
-            creds = flow.run_local_server(port=9000, access_type='offline',
-                                          prompt='consent')
-            logger.info(f"cred: {creds.refresh_token}")
+            # For web applications, we need to handle OAuth through the web flow
+            # This function should not be called directly for web OAuth
+            raise Exception("Web OAuth flow should be handled through /auth/google-drive endpoint")
         with open(TOKEN_PATH, 'w') as token:
             token.write(creds.to_json())
     return creds
@@ -2038,9 +2014,9 @@ def google_drive_auth():
             }), 500
         
         # Create OAuth flow
-        flow = InstalledAppFlow.from_client_config(
+        flow = Flow.from_client_config(
             {
-                "installed": {
+                "web": {
                     "client_id": GDRIVE_CLIENT_ID,
                     "client_secret": GDRIVE_CLIENT_SECRET,
                     "redirect_uris": [GDRIVE_REDIRECT_URI],
@@ -2090,9 +2066,9 @@ def google_drive_callback():
             }), 400
         
         # Create OAuth flow
-        flow = InstalledAppFlow.from_client_config(
+        flow = Flow.from_client_config(
             {
-                "installed": {
+                "web": {
                     "client_id": GDRIVE_CLIENT_ID,
                     "client_secret": GDRIVE_CLIENT_SECRET,
                     "redirect_uris": [GDRIVE_REDIRECT_URI],
