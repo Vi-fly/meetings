@@ -2054,8 +2054,7 @@ def google_drive_auth():
         # Generate authorization URL
         auth_url, _ = flow.authorization_url(
             access_type='offline',
-            prompt='consent',
-            redirect_uri=GDRIVE_REDIRECT_URI
+            prompt='consent'
         )
         
         return jsonify({
