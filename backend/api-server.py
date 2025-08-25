@@ -2024,7 +2024,8 @@ def google_drive_auth():
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
             },
-            SCOPES
+            SCOPES,
+            redirect_uri=GDRIVE_REDIRECT_URI
         )
         
         # Generate authorization URL
@@ -2032,12 +2033,6 @@ def google_drive_auth():
             access_type='offline',
             prompt='consent'
         )
-        
-        # Manually add redirect_uri if it's missing
-        if 'redirect_uri=' not in auth_url:
-            import urllib.parse
-            encoded_redirect_uri = urllib.parse.quote(GDRIVE_REDIRECT_URI, safe='')
-            auth_url += f'&redirect_uri={encoded_redirect_uri}'
         
         return jsonify({
             'success': True,
@@ -2082,7 +2077,8 @@ def google_drive_callback():
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
             },
-            SCOPES
+            SCOPES,
+            redirect_uri=GDRIVE_REDIRECT_URI
         )
         
         # Exchange code for tokens
