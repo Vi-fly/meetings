@@ -24,7 +24,7 @@ import copy
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 import logging
@@ -2014,9 +2014,9 @@ def google_drive_auth():
             }), 500
         
         # Create OAuth flow for web application
-        flow = InstalledAppFlow.from_client_config(
+        flow = Flow.from_client_config(
             {
-                "installed": {
+                "web": {
                     "client_id": GDRIVE_CLIENT_ID,
                     "client_secret": GDRIVE_CLIENT_SECRET,
                     "redirect_uris": [GDRIVE_REDIRECT_URI],
@@ -2067,9 +2067,9 @@ def google_drive_callback():
             }), 400
         
         # Create OAuth flow for web application
-        flow = InstalledAppFlow.from_client_config(
+        flow = Flow.from_client_config(
             {
-                "installed": {
+                "web": {
                     "client_id": GDRIVE_CLIENT_ID,
                     "client_secret": GDRIVE_CLIENT_SECRET,
                     "redirect_uris": [GDRIVE_REDIRECT_URI],
