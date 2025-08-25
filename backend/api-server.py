@@ -2025,9 +2025,17 @@ def authenticate():
     
     # Otherwise, start OAuth flow
     try:
-        flow = Flow.from_client_secrets_file(
-            CLIENT_SECRETS_FILE,
-            scopes=SCOPES,
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GDRIVE_CLIENT_ID,
+                    "client_secret": GDRIVE_CLIENT_SECRET,
+                    "redirect_uris": [GDRIVE_REDIRECT_URI],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token"
+                }
+            },
+            SCOPES,
             redirect_uri=GDRIVE_REDIRECT_URI
         )
         authorization_url, state = flow.authorization_url(
@@ -2050,9 +2058,17 @@ def oauth2callback():
     """Handle Google Drive OAuth callback"""
     try:
         state = session.get('state')
-        flow = Flow.from_client_secrets_file(
-            CLIENT_SECRETS_FILE,
-            scopes=SCOPES,
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": GDRIVE_CLIENT_ID,
+                    "client_secret": GDRIVE_CLIENT_SECRET,
+                    "redirect_uris": [GDRIVE_REDIRECT_URI],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token"
+                }
+            },
+            SCOPES,
             redirect_uri=GDRIVE_REDIRECT_URI
         )
         flow.fetch_token(authorization_response=request.url, access_type='offline')
