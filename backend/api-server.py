@@ -2013,7 +2013,7 @@ def google_drive_auth():
                 'error': 'Google Drive configuration not found. Please set GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REDIRECT_URI environment variables.'
             }), 500
         
-        # Create OAuth flow
+        # Create OAuth flow for web application
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -2024,7 +2024,8 @@ def google_drive_auth():
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
             },
-            SCOPES
+            SCOPES,
+            redirect_uri=GDRIVE_REDIRECT_URI
         )
         
         # Generate authorization URL
@@ -2065,7 +2066,7 @@ def google_drive_callback():
                 'error': 'No authorization code received'
             }), 400
         
-        # Create OAuth flow
+        # Create OAuth flow for web application
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -2076,7 +2077,8 @@ def google_drive_callback():
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
             },
-            SCOPES
+            SCOPES,
+            redirect_uri=GDRIVE_REDIRECT_URI
         )
         
         # Exchange code for tokens
