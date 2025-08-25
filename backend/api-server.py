@@ -1,6 +1,6 @@
 from threading import Lock
 import uuid
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, session, redirect
 from flask_cors import CORS
 import os
 import json
@@ -45,7 +45,7 @@ GDRIVE_CLIENT_SECRET = os.getenv('GDRIVE_CLIENT_SECRET')
 GDRIVE_REDIRECT_URI = os.getenv('GDRIVE_REDIRECT_URI')
 TOKEN_PATH = './token.json'
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
-CREDENTIALS_PATH = './oauth.json'
+CLIENT_SECRETS_FILE = './client_secrets.json'
 
 # Supabase configuration
 SUPABASE_URL = "https://ryftlmknvgxodnxkilzg.supabase.co"
@@ -362,6 +362,7 @@ def delete_drive_file(file_id):
 
 
 app = Flask(__name__)
+app.secret_key = 'your-secret-key-here'  # Change this in production
 # Configure CORS for production deployment
 CORS(app, origins=[
     "http://localhost:3000",
@@ -2002,43 +2003,40 @@ def get_meeting_minutes_from_supabase(meeting_id):
 
 # Google Drive Authentication Routes
 @app.route('/auth/google-drive', methods=['GET'])
-def google_drive_auth():
+def authenticate():
     """Initiate Google Drive OAuth flow"""
+    # If token.json exists and has a valid refresh token, skip OAuth flow
+    if os.path.exists(TOKEN_PATH):
+        try:
+            with open(TOKEN_PATH, 'r') as token_file:
+                data = json.load(token_file)
+                creds = Credentials.from_authorized_user_info(data, SCOPES)
+                if creds and creds.refresh_token:
+                    # Optionally, check if token is expired and refresh if needed
+                    if creds.expired and creds.refresh_token:
+                        from google.auth.transport.requests import Request
+                        creds.refresh(Request())
+                        with open(TOKEN_PATH, 'w') as token_file:
+                            token_file.write(creds.to_json())
+                    # Already authenticated, return success
+                    return jsonify({'success': True, 'auth_url': None, 'status': 'already_authenticated'})
+        except Exception:
+            pass
+    
+    # Otherwise, start OAuth flow
     try:
-        # Check if environment variables are set
-        if not GDRIVE_CLIENT_ID or not GDRIVE_CLIENT_SECRET or not GDRIVE_REDIRECT_URI:
-            logger.error("Google Drive environment variables not configured")
-            return jsonify({
-                'success': False,
-                'error': 'Google Drive configuration not found. Please set GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REDIRECT_URI environment variables.'
-            }), 500
-        
-        # Create OAuth flow for web application
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GDRIVE_CLIENT_ID,
-                    "client_secret": GDRIVE_CLIENT_SECRET,
-                    "redirect_uris": [GDRIVE_REDIRECT_URI],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            },
-            SCOPES,
+        flow = Flow.from_client_secrets_file(
+            CLIENT_SECRETS_FILE,
+            scopes=SCOPES,
             redirect_uri=GDRIVE_REDIRECT_URI
         )
-        
-        # Generate authorization URL
-        auth_url, _ = flow.authorization_url(
+        authorization_url, state = flow.authorization_url(
             access_type='offline',
+            include_granted_scopes='true',
             prompt='consent'
         )
-        
-        return jsonify({
-            'success': True,
-            'auth_url': auth_url
-        })
-        
+        session['state'] = state
+        return jsonify({'success': True, 'auth_url': authorization_url})
     except Exception as e:
         logger.error(f"Error creating Google Drive auth URL: {e}")
         return jsonify({
@@ -2048,52 +2046,30 @@ def google_drive_auth():
 
 
 @app.route('/auth/google-drive/callback', methods=['GET'])
-def google_drive_callback():
+def oauth2callback():
     """Handle Google Drive OAuth callback"""
     try:
-        # Check if environment variables are set
-        if not GDRIVE_CLIENT_ID or not GDRIVE_CLIENT_SECRET or not GDRIVE_REDIRECT_URI:
-            logger.error("Google Drive environment variables not configured")
-            return jsonify({
-                'success': False,
-                'error': 'Google Drive configuration not found. Please set GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REDIRECT_URI environment variables.'
-            }), 500
-        
-        code = request.args.get('code')
-        if not code:
-            return jsonify({
-                'success': False,
-                'error': 'No authorization code received'
-            }), 400
-        
-        # Create OAuth flow for web application
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GDRIVE_CLIENT_ID,
-                    "client_secret": GDRIVE_CLIENT_SECRET,
-                    "redirect_uris": [GDRIVE_REDIRECT_URI],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            },
-            SCOPES,
+        state = session.get('state')
+        flow = Flow.from_client_secrets_file(
+            CLIENT_SECRETS_FILE,
+            scopes=SCOPES,
             redirect_uri=GDRIVE_REDIRECT_URI
         )
-        
-        # Exchange code for tokens
-        flow.fetch_token(code=code)
+        flow.fetch_token(authorization_response=request.url, access_type='offline')
         credentials = flow.credentials
-        
-        # Save credentials to file
-        with open(TOKEN_PATH, 'w') as token:
-            token.write(credentials.to_json())
-        
-        return jsonify({
-            'success': True,
-            'message': 'Google Drive authorization successful!'
-        })
-        
+        if credentials and credentials.token:
+            # Save credentials to token.json
+            with open(TOKEN_PATH, 'w') as token_file:
+                token_file.write(credentials.to_json())
+            return jsonify({
+                'success': True,
+                'message': 'Google Drive authorization successful!'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to get credentials'
+            }), 500
     except Exception as e:
         logger.error(f"Error in Google Drive callback: {e}")
         return jsonify({
