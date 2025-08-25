@@ -2034,13 +2034,10 @@ def google_drive_auth():
         )
         
         # Manually add redirect_uri if it's missing
-        logger.info(f"Generated auth URL: {auth_url}")
-        logger.info(f"Contains redirect_uri: {'redirect_uri=' in auth_url}")
         if 'redirect_uri=' not in auth_url:
             import urllib.parse
             encoded_redirect_uri = urllib.parse.quote(GDRIVE_REDIRECT_URI, safe='')
             auth_url += f'&redirect_uri={encoded_redirect_uri}'
-            logger.info(f"Added redirect_uri, new URL: {auth_url}")
         
         return jsonify({
             'success': True,
