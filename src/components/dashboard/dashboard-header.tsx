@@ -9,7 +9,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { Bell, Bug, LogOut, Search } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { GoogleDriveAuthService, GoogleDriveAuthStatus } from "@/services/google-drive-auth";
+import { Bell, CheckCircle, Cloud, LogOut, Search } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface DashboardHeaderProps {
@@ -25,6 +28,55 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ user, onLogout, searchQuery = "", onSearchChange }: DashboardHeaderProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [authStatus, setAuthStatus] = useState<GoogleDriveAuthStatus | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Check auth status on component mount
+  useEffect(() => {
+    checkAuthStatus();
+  }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const status = await GoogleDriveAuthService.checkAuthStatus();
+      setAuthStatus(status);
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+    }
+  };
+
+  const handleGoogleDriveAuth = async () => {
+    setIsLoading(true);
+    try {
+      const result = await GoogleDriveAuthService.initiateAuth();
+      if (result.success) {
+        toast({
+          title: "Authorization Started",
+          description: "Please complete the authorization in the new window.",
+        });
+        
+        // Poll for status changes
+        setTimeout(async () => {
+          await checkAuthStatus();
+        }, 3000);
+      } else {
+        toast({
+          title: "Authorization Failed",
+          description: result.error || "Failed to start authorization",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to initiate Google Drive authorization",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -48,15 +100,22 @@ export function DashboardHeader({ user, onLogout, searchQuery = "", onSearchChan
 
           <ThemeToggle />
 
-          {/* Debug Upload Button */}
+          {/* Google Drive Authorization Button */}
           <Button 
             variant="ghost" 
             size="icon" 
             className="relative interactive-scale"
-            onClick={() => navigate('/debug-upload')}
-            title="Debug Google Drive Upload"
+            onClick={handleGoogleDriveAuth}
+            disabled={isLoading}
+            title={authStatus?.authorized ? "Google Drive Authorized" : "Authorize Google Drive"}
           >
-            <Bug className="h-4 w-4" />
+            {isLoading ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : authStatus?.authorized ? (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            ) : (
+              <Cloud className="h-4 w-4" />
+            )}
           </Button>
 
           <Button variant="ghost" size="icon" className="relative interactive-scale">

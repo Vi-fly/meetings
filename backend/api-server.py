@@ -386,7 +386,14 @@ def delete_drive_file(file_id):
 
 
 app = Flask(__name__)
-CORS(app)
+# Configure CORS for production deployment
+CORS(app, origins=[
+    "http://localhost:3000",
+    "http://localhost:8080", 
+    "https://*.vercel.app",
+    "https://*.onrender.com",
+    "https://sync-essence.vercel.app"
+], supports_credentials=True)
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
@@ -427,6 +434,16 @@ def test_transcribe():
         'status': 'transcribe_endpoint_available',
         'message': 'Transcribe endpoint is ready to accept file uploads',
         'supported_formats': list(ALLOWED_EXTENSIONS),
+        'timestamp': datetime.now().isoformat()
+    })
+
+
+@app.route('/test-auth', methods=['GET'])
+def test_auth():
+    """Test endpoint for auth functionality"""
+    return jsonify({
+        'status': 'auth_endpoint_available',
+        'message': 'Auth endpoints are working',
         'timestamp': datetime.now().isoformat()
     })
 
@@ -2007,5 +2024,151 @@ def get_meeting_minutes_from_supabase(meeting_id):
         return None
 
 
+# Google Drive Authentication Routes
+@app.route('/auth/google-drive', methods=['GET'])
+def google_drive_auth():
+    """Initiate Google Drive OAuth flow"""
+    try:
+        # Check if environment variables are set
+        if not GDRIVE_CLIENT_ID or not GDRIVE_CLIENT_SECRET or not GDRIVE_REDIRECT_URI:
+            logger.error("Google Drive environment variables not configured")
+            return jsonify({
+                'success': False,
+                'error': 'Google Drive configuration not found. Please set GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REDIRECT_URI environment variables.'
+            }), 500
+        
+        # Create OAuth flow
+        flow = InstalledAppFlow.from_client_config(
+            {
+                "installed": {
+                    "client_id": GDRIVE_CLIENT_ID,
+                    "client_secret": GDRIVE_CLIENT_SECRET,
+                    "redirect_uris": [GDRIVE_REDIRECT_URI],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token"
+                }
+            },
+            SCOPES
+        )
+        
+        # Generate authorization URL
+        auth_url, _ = flow.authorization_url(
+            access_type='offline',
+            prompt='consent',
+            redirect_uri=GDRIVE_REDIRECT_URI
+        )
+        
+        return jsonify({
+            'success': True,
+            'auth_url': auth_url
+        })
+        
+    except Exception as e:
+        logger.error(f"Error creating Google Drive auth URL: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/auth/google-drive/callback', methods=['GET'])
+def google_drive_callback():
+    """Handle Google Drive OAuth callback"""
+    try:
+        # Check if environment variables are set
+        if not GDRIVE_CLIENT_ID or not GDRIVE_CLIENT_SECRET or not GDRIVE_REDIRECT_URI:
+            logger.error("Google Drive environment variables not configured")
+            return jsonify({
+                'success': False,
+                'error': 'Google Drive configuration not found. Please set GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REDIRECT_URI environment variables.'
+            }), 500
+        
+        code = request.args.get('code')
+        if not code:
+            return jsonify({
+                'success': False,
+                'error': 'No authorization code received'
+            }), 400
+        
+        # Create OAuth flow
+        flow = InstalledAppFlow.from_client_config(
+            {
+                "installed": {
+                    "client_id": GDRIVE_CLIENT_ID,
+                    "client_secret": GDRIVE_CLIENT_SECRET,
+                    "redirect_uris": [GDRIVE_REDIRECT_URI],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token"
+                }
+            },
+            SCOPES
+        )
+        
+        # Exchange code for tokens
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        
+        # Save credentials to file
+        with open(TOKEN_PATH, 'w') as token:
+            token.write(credentials.to_json())
+        
+        return jsonify({
+            'success': True,
+            'message': 'Google Drive authorization successful!'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in Google Drive callback: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/auth/google-drive/status', methods=['GET'])
+def google_drive_auth_status():
+    """Check if Google Drive is authorized"""
+    try:
+        # Check if environment variables are set
+        if not GDRIVE_CLIENT_ID or not GDRIVE_CLIENT_SECRET or not GDRIVE_REDIRECT_URI:
+            logger.error("Google Drive environment variables not configured")
+            return jsonify({
+                'success': False,
+                'error': 'Google Drive configuration not found. Please set GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, and GDRIVE_REDIRECT_URI environment variables.'
+            }), 500
+        
+        logger.info("Checking Google Drive auth status...")
+        creds = None
+        if os.path.exists(TOKEN_PATH):
+            logger.info(f"Token file exists at {TOKEN_PATH}")
+            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+        else:
+            logger.info("No token file found")
+        
+        if creds and creds.valid:
+            logger.info("Credentials are valid")
+            return jsonify({
+                'success': True,
+                'authorized': True,
+                'message': 'Google Drive is authorized'
+            })
+        else:
+            logger.info("Credentials are not valid or don't exist")
+            return jsonify({
+                'success': True,
+                'authorized': False,
+                'message': 'Google Drive is not authorized'
+            })
+            
+    except Exception as e:
+        logger.error(f"Error checking Google Drive auth status: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Get port from environment variable (for production deployment)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)

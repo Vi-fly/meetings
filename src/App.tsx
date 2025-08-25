@@ -8,6 +8,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { MeetingProcessor } from "./components/meeting/meeting-processor";
 import Dashboard from "./pages/Dashboard";
+import { GoogleDriveCallback } from "./pages/GoogleDriveCallback";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -53,6 +54,12 @@ const App = () => {
                     <Login onLogin={handleLogin} />
                   )
                 } 
+              />
+
+              {/* Google Drive OAuth Callback Route */}
+              <Route 
+                path="/google-drive-callback" 
+                element={<GoogleDriveCallback />} 
               />
 
               {/* Debug route for testing Google Drive upload */}
