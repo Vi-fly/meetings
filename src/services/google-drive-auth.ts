@@ -54,8 +54,11 @@ export class GoogleDriveAuthService {
       console.log('Response data:', data);
       
       if (data.success && data.auth_url) {
-        // Open the auth URL in a new window
-        window.open(data.auth_url, '_blank', 'width=500,height=600');
+        // Open the auth URL in a new window for OAuth flow
+        const authWindow = window.open(data.auth_url, '_blank', 'width=500,height=600');
+        
+        // For desktop applications, we need to handle the callback differently
+        // The callback will redirect to our callback page
         return data;
       } else {
         return {

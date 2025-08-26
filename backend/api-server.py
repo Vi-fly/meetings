@@ -2079,9 +2079,18 @@ def google_drive_callback():
             SCOPES
         )
         
-        # Exchange code for tokens
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
+        # For desktop applications, we need to handle the callback manually
+        # The code parameter contains the authorization code
+        try:
+            # Exchange code for tokens using the flow
+            flow.fetch_token(code=code)
+            credentials = flow.credentials
+        except Exception as token_error:
+            logger.error(f"Error exchanging code for tokens: {token_error}")
+            return jsonify({
+                'success': False,
+                'error': f'Failed to exchange authorization code: {str(token_error)}'
+            }), 400
         
         # Save credentials to file
         with open(TOKEN_PATH, 'w') as token:
