@@ -31,6 +31,8 @@ export function DashboardHeader({ user, onLogout, searchQuery = "", onSearchChan
   const { toast } = useToast();
   const [authStatus, setAuthStatus] = useState<GoogleDriveAuthStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  console.log('DashboardHeader rendered, isLoading:', isLoading, 'authStatus:', authStatus);
 
   // Check auth status on component mount
   useEffect(() => {
@@ -112,7 +114,10 @@ export function DashboardHeader({ user, onLogout, searchQuery = "", onSearchChan
             variant="ghost" 
             size="icon" 
             className="relative interactive-scale"
-            onClick={handleGoogleDriveAuth}
+            onClick={() => {
+              console.log('Button clicked!');
+              handleGoogleDriveAuth();
+            }}
             disabled={isLoading}
             title={authStatus?.authorized ? "Google Drive Authorized" : "Authorize Google Drive"}
           >
