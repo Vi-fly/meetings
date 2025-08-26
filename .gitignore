@@ -41,3 +41,4 @@ backend/env.config
 # Environment
 .env
 .env.*.local
+"backend/client_secrets.json" 
