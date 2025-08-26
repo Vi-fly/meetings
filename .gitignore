@@ -37,7 +37,6 @@ __pycache__/
 backend/token.json
 backend/oauth.json
 backend/env.config
-backend/client_secrets.json
 
 # Environment
 .env
