@@ -32,8 +32,8 @@ export const isProduction = import.meta.env.PROD;
 // Legacy config for backward compatibility
 export const config = {
   // Email Configuration
-  EMAIL_PASSWORD: process.env.VITE_EMAIL_PASSWORD || "",
-  EMAIL_USER: process.env.VITE_EMAIL_USER || "",
+  EMAIL_PASSWORD: import.meta.env.VITE_EMAIL_PASSWORD || "",
+  EMAIL_USER: import.meta.env.VITE_EMAIL_USER || "",
   
   // Supabase Configuration
   SUPABASE_URL: SUPABASE_URL,
