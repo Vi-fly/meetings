@@ -368,7 +368,7 @@ CORS(app, origins=[
     "http://localhost:8080", 
     "https://*.vercel.app",
     "https://*.onrender.com",
-    "https://sync-essence.vercel.app"
+    "https://meetings-inky.vercel.app"
 ], supports_credentials=True)
 
 # Configuration
