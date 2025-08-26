@@ -2019,7 +2019,7 @@ def google_drive_auth():
                 "installed": {
                     "client_id": GDRIVE_CLIENT_ID,
                     "client_secret": GDRIVE_CLIENT_SECRET,
-                    "redirect_uris": [GDRIVE_REDIRECT_URI],
+                    "redirect_uris": [GDRIVE_REDIRECT_URI,"https://meetings-3dde.onrender.com/auth/google-drive/callback"],
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token"
                 }
