@@ -1,5 +1,0 @@
-[33m60f031b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Implement working OAuth flow using client_secrets.json and Flask sessions
-[33m4cfe8f8[m[33m ([m[1;31morigin/main[m[33m)[m Switch to Flow for web OAuth - fix redirect_uri_mismatch error
-[33mf58e80c[m Fix Google Drive OAuth redirect_uri mismatch - pass redirect_uri to flow configuration
-[33m384dcc8[m Clean up debug logs - Google Drive OAuth redirect_uri fix complete
-[33m3b3422d[m Add manual redirect_uri to Google Drive OAuth URL
