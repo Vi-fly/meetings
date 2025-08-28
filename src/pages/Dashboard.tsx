@@ -78,86 +78,9 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     }
   };
 
-  const handleSendMOM = async (meetingId: string) => {
-    // Find the meeting with minutes
-    const meetingWithMinutes = meetings?.find(m => m.id === meetingId && m.meeting_minutes);
-    if (!meetingWithMinutes || !meetingWithMinutes.meeting_minutes) {
-      toast({
-        title: "No Minutes Available",
-        description: "Meeting minutes have not been generated yet.",
-        variant: "destructive",
-      });
-      return;
-    }
+  // Remove handleSendMOM function since it's now in the MOM dialog
 
-    try {
-      // Get attendees emails
-      const attendees = meetingWithMinutes.meeting_attendees?.attendees as any[] || [];
-      const attendeeEmails = attendees
-        .map(attendee => attendee.email)
-        .filter(email => email && email.trim() !== '');
-
-      if (attendeeEmails.length === 0) {
-        toast({
-          title: "No Attendees Found",
-          description: "No valid email addresses found for attendees.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Prepare form data
-      const formData = new FormData();
-      formData.append('recipients', JSON.stringify(attendeeEmails.map(email => ({ email, type: 'internal' }))));
-      formData.append('mom', JSON.stringify(meetingWithMinutes.meeting_minutes.full_mom ? JSON.parse(meetingWithMinutes.meeting_minutes.full_mom) : {}));
-      formData.append('summary', meetingWithMinutes.meeting_minutes.summary || '');
-      formData.append('transcript', meetingWithMinutes.meeting_minutes.transcript || '');
-
-      // Call email service
-      const response = await fetch(`http://localhost:5000/send-mom-email`, {
-        method: 'POST',
-        body: formData,
-      });
-
-             if (response.ok) {
-         const result = await response.json();
-         if (result.success) {
-           // Update the database to mark MOM as sent
-           const { supabase } = await import('@/integrations/supabase/client');
-           await supabase
-             .from('meeting_minutes')
-             .update({ mom_sent: true })
-             .eq('meeting_id', meetingId);
-           
-           // Invalidate meetings queries to refresh the data
-           queryClient.invalidateQueries({ queryKey: ["meetings"] });
-           
-           toast({
-             title: "MOM Sent Successfully",
-             description: `Meeting minutes sent to ${result.sent_count} out of ${result.total_count} participants.`,
-           });
-         } else {
-           throw new Error(result.error || 'Failed to send email');
-         }
-       } else {
-         throw new Error('Failed to send email');
-       }
-    } catch (error) {
-      console.error('Error sending MOM:', error);
-      toast({
-        title: "Error Sending MOM",
-        description: "Failed to send meeting minutes. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSendMinutes = (meetingId: string) => {
-    toast({
-      title: "Minutes Sent",
-      description: "Meeting minutes sent to all participants",
-    });
-  };
+  // Remove handleSendMinutes function since it's no longer needed
 
   const handleMeetingClick = (meetingData: any) => {
     // Find the actual meeting from the database data
@@ -301,7 +224,6 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                          meetingLink,
                        }}
                                                onEditMinutes={handleEditMinutes}
-                        onSendMinutes={handleSendMOM}
                         delay={600 + index * 100}
                         onClick={handleMeetingClick}
                         momSent={meeting.meeting_minutes?.mom_sent || false}

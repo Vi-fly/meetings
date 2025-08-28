@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Calendar, Clock, ExternalLink, Users } from "lucide-react";
+import { Calendar, Clock, ExternalLink, FileText, Mail, Users } from "lucide-react";
 
 
 interface Attendee {
@@ -26,7 +26,6 @@ interface Meeting {
 interface MeetingCardProps {
   meeting: Meeting;
   onEditMinutes?: (meetingId: string) => void;
-  onSendMinutes?: (meetingId: string) => void;
   delay?: number;
   onClick?: (meeting: Meeting) => void;
   momSent?: boolean;
@@ -35,7 +34,6 @@ interface MeetingCardProps {
 export function MeetingCard({ 
   meeting, 
   onEditMinutes, 
-  onSendMinutes, 
   delay = 0,
   onClick,
   momSent = false
@@ -124,29 +122,27 @@ export function MeetingCard({
             
             {meeting.hasMinutes && onEditMinutes && (
               <Button
-                variant="outline"
+                variant={momSent ? "outline" : "default"}
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
                   onEditMinutes(meeting.id);
                 }}
               >
-                View Minutes
+                {momSent ? (
+                  <>
+                    <FileText className="h-3 w-3 mr-1" />
+                    View Minutes
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-3 w-3 mr-1" />
+                    Send MOM
+                  </>
+                )}
               </Button>
             )}
             
-                         {meeting.hasMinutes && onSendMinutes && !momSent && (
-               <Button
-                 variant="default"
-                 size="sm"
-                 onClick={(e) => {
-                   e.stopPropagation();
-                   onSendMinutes(meeting.id);
-                 }}
-               >
-                 Send MOM
-               </Button>
-             )}
           </div>
         </div>
 

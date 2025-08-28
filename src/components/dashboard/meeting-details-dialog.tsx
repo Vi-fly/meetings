@@ -10,21 +10,20 @@ import { useMeetingDetails } from "@/hooks/use-meeting-details";
 import { useToast } from "@/hooks/use-toast";
 import { Database } from "@/integrations/supabase/types";
 import { getDisplayName, getInitials } from "@/lib/utils";
-import { config } from "@/services/config";
 import { format } from "date-fns";
 import {
-  BarChart3,
-  Calendar,
-  Clock,
-  Download,
-  FileText,
-  FileVideo,
-  Globe,
-  Mail,
-  Play,
-  Sparkles,
-  Users,
-  Video
+    BarChart3,
+    Calendar,
+    Clock,
+    Download,
+    FileText,
+    FileVideo,
+    Globe,
+    Mail,
+    Play,
+    Sparkles,
+    Users,
+    Video
 } from "lucide-react";
 import { useState } from "react";
 import { MOMDialog } from "./mom-dialog";
@@ -101,73 +100,7 @@ export function MeetingDetailsDialog({ meeting, open, onClose }: MeetingDetailsD
     window.open(driveLink, '_blank');
   };
 
-  const handleSendMOM = async () => {
-    if (!meeting || !meetingMinutes) return;
-
-    try {
-      // Get attendees emails
-      const attendees = meeting.meeting_attendees?.attendees as any[] || [];
-      const attendeeEmails = attendees
-        .map(attendee => attendee.email)
-        .filter(email => email && email.trim() !== '');
-
-      if (attendeeEmails.length === 0) {
-        toast({
-          title: "No Attendees Found",
-          description: "No valid email addresses found for attendees.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Prepare email content
-      const emailData = {
-        to: attendeeEmails,
-        subject: `Meeting Minutes: ${meeting.title}`,
-        meetingTitle: meeting.title,
-        meetingDate: format(new Date(meeting.scheduled_at), "MMM dd, yyyy 'at' h:mm a"),
-        attendees: attendees.map(a => getDisplayName(a)),
-        meetingMinutes: meetingMinutes,
-        meetingDescription: meeting.description || ''
-      };
-
-      // Call email service
-      const formData = new FormData();
-      formData.append('recipients', JSON.stringify(attendeeEmails.map(email => ({ email, type: 'internal' }))));
-      formData.append('mom', JSON.stringify(meetingMinutes.full_mom ? JSON.parse(meetingMinutes.full_mom) : {}));
-      formData.append('summary', meetingMinutes.summary || '');
-      formData.append('transcript', meetingMinutes.transcript || '');
-
-      const response = await fetch(`${config.BACKEND_API_URL}/send-mom-email`, {
-        method: 'POST',
-        body: formData,
-      });
-
-             if (response.ok) {
-         const result = await response.json();
-         if (result.success) {
-           // Update the database to mark MOM as sent
-           await updateMOMSent();
-           
-           toast({
-             title: "MOM Sent Successfully",
-             description: `Meeting minutes sent to ${result.sent_count} out of ${result.total_count} participants.`,
-           });
-         } else {
-           throw new Error(result.error || 'Failed to send email');
-         }
-       } else {
-         throw new Error('Failed to send email');
-       }
-    } catch (error) {
-      console.error('Error sending MOM:', error);
-      toast({
-        title: "Error Sending MOM",
-        description: "Failed to send meeting minutes. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
+  // Remove the handleSendMOM function since it's now in the MOM dialog
 
   const getMeetingStatus = () => {
     if (!meeting) return "unknown";
@@ -270,26 +203,25 @@ export function MeetingDetailsDialog({ meeting, open, onClose }: MeetingDetailsD
                       </div>
                     )}
                     
-                    {/* Action Buttons */}
+                    {/* Action Button */}
                     <div className="flex gap-3">
                       <Button 
                         onClick={() => setMomDialogOpen(true)}
-                        variant="outline"
+                        variant={meetingMinutes?.mom_sent ? "outline" : "default"}
                         className="flex-1"
                       >
-                        <FileText className="h-4 w-4 mr-2" />
-                        View Minutes
+                        {meetingMinutes?.mom_sent ? (
+                          <>
+                            <FileText className="h-4 w-4 mr-2" />
+                            View Minutes
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="h-4 w-4 mr-2" />
+                            Send MOM
+                          </>
+                        )}
                       </Button>
-                      {!meetingMinutes?.mom_sent && (
-                        <Button 
-                          onClick={handleSendMOM}
-                          variant="default"
-                          className="flex-1"
-                        >
-                          <Mail className="h-4 w-4 mr-2" />
-                          Send MOM
-                        </Button>
-                      )}
                     </div>
                   </div>
                 )}
