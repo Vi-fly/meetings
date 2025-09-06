@@ -237,6 +237,48 @@ export type Database = {
           },
         ]
       }
+      meeting_reminders: {
+        Row: {
+          created_at: string | null
+          meeting_id: string
+          reminder_sent: boolean | null
+          reminder_sent_at: string | null
+          scheduled_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          meeting_id: string
+          reminder_sent?: boolean | null
+          reminder_sent_at?: string | null
+          scheduled_at: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          meeting_id?: string
+          reminder_sent?: boolean | null
+          reminder_sent_at?: string | null
+          scheduled_at?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_reminders_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_reminders_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meeting_videos: {
         Row: {
           drive_share_link: string

@@ -13,6 +13,7 @@ import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { AIProcessingPanel } from "@/components/meeting/ai-processing-panel";
 import { ContentGallery } from "@/components/meeting/content-gallery";
 import { TestApiConnection } from "@/components/test-api-connection";
+import { TestReminderComponent } from "@/components/test-reminder";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -245,7 +246,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
         {/* AI Features Tabs */}
         <Tabs defaultValue="overview" className="w-full animate-fade-in" style={{ animationDelay: "900ms" }}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               Overview
@@ -257,6 +258,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <TabsTrigger value="gallery" className="flex items-center gap-2">
               <Folder className="h-4 w-4" />
               Content Gallery
+            </TabsTrigger>
+            <TabsTrigger value="test" className="flex items-center gap-2">
+              <Wifi className="h-4 w-4" />
+              Test
             </TabsTrigger>
           </TabsList>
 
@@ -321,6 +326,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
           <TabsContent value="gallery" className="space-y-6">
             <ContentGallery />
+          </TabsContent>
+
+          <TabsContent value="test" className="space-y-6">
+            <TestReminderComponent />
+            <TestApiConnection />
           </TabsContent>
         </Tabs>
       </main>

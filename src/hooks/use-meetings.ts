@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { schedulerService } from "@/services/scheduler-service";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 type Meeting = Database["public"]["Tables"]["meetings"]["Row"];
@@ -151,6 +152,15 @@ export function useCreateMeeting() {
         } else {
           console.log('Attendees saved successfully');
         }
+      }
+
+      // Schedule reminder for the meeting (30 minutes before)
+      try {
+        await schedulerService.scheduleMeetingReminder(meetingData.id, meeting.scheduled_at);
+        console.log('Reminder scheduled successfully for meeting:', meetingData.title);
+      } catch (error) {
+        console.error('Error scheduling reminder:', error);
+        // Don't throw error here as meeting creation should still succeed
       }
 
       return meetingData;

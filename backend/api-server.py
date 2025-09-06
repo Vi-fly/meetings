@@ -9,6 +9,15 @@ import io
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import assemblyai as aai
+
+# Try to import moviepy, fallback if not available
+try:
+    from moviepy.editor import VideoFileClip
+    MOVIEPY_AVAILABLE = True
+    print("MoviePy available - video chunking enabled")
+except ImportError:
+    MOVIEPY_AVAILABLE = False
+    print("Warning: moviepy not available. Video chunking will be disabled.")
 # Google AI import removed for now - focusing on email functionality
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, ListFlowable
@@ -228,83 +237,119 @@ def download_from_drive(drive_file_id, filename):
 
 def save_transcript_to_supabase(meeting_id, transcript_result):
     """
-    Save transcript to Supabase meeting_minutes table
+    Save transcript to Supabase meeting_minutes table with retry logic
     """
-    try:
-        data = {
-            "meeting_id": meeting_id,
-            "transcript": transcript_result.get('text', ''),
-            "created_at": datetime.now().isoformat()
-        }
-        
-        api_key = SUPABASE_SERVICE_ROLE_KEY if SUPABASE_SERVICE_ROLE_KEY else SUPABASE_ANON_KEY
-        
-        headers = {
-            "apikey": api_key,
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates"
-        }
-        
-        response = requests.post(
-            f"{SUPABASE_URL}/rest/v1/meeting_minutes",
-            headers=headers,
-            json=data
-        )
-        
-        if response.status_code in [200, 201]:
-            logger.info(f"Successfully saved transcript to Supabase for meeting {meeting_id}")
-            return True
-        else:
-            logger.error(f"Failed to save transcript to Supabase: {response.status_code} - {response.text}")
-            return False
+    max_retries = 3
+    retry_delay = 2  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            data = {
+                "meeting_id": meeting_id,
+                "transcript": transcript_result.get('text', '') if transcript_result else '',
+                "created_at": datetime.now().isoformat()
+            }
             
-    except Exception as e:
-        logger.error(f"Error saving transcript to Supabase: {e}")
-        return False
+            api_key = SUPABASE_SERVICE_ROLE_KEY if SUPABASE_SERVICE_ROLE_KEY else SUPABASE_ANON_KEY
+            
+            headers = {
+                "apikey": api_key,
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates"
+            }
+            
+            logger.info(f"Attempting to save transcript to Supabase (attempt {attempt + 1}/{max_retries})")
+            response = requests.post(
+                f"{SUPABASE_URL}/rest/v1/meeting_minutes",
+                headers=headers,
+                json=data,
+                timeout=30  # 30 second timeout
+            )
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"Successfully saved transcript to Supabase for meeting {meeting_id}")
+                return True
+            else:
+                logger.error(f"Failed to save transcript to Supabase: {response.status_code} - {response.text}")
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error saving transcript to Supabase (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                return False
+    
+    return False
 
 
 def save_mom_to_supabase(meeting_id, mom_result, transcript_text):
     """
-    Save Minutes of Meeting to Supabase meeting_minutes table
+    Save Minutes of Meeting to Supabase meeting_minutes table with retry logic
     """
-    try:
-        # Convert MoM to JSON string
-        mom_json = json.dumps(mom_result)
-        
-        data = {
-            "meeting_id": meeting_id,
-            "full_mom": mom_json,
-            "summary": mom_result.get('summary', ''),
-            "transcript": transcript_text,
-            "updated_at": datetime.now().isoformat()
-        }
-        
-        api_key = SUPABASE_SERVICE_ROLE_KEY if SUPABASE_SERVICE_ROLE_KEY else SUPABASE_ANON_KEY
-        
-        headers = {
-            "apikey": api_key,
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates"
-        }
-        
-        response = requests.patch(
-            f"{SUPABASE_URL}/rest/v1/meeting_minutes?meeting_id=eq.{meeting_id}",
-            headers=headers,
-            json=data
-        )
-        
-        if response.status_code in [200, 201, 204]:
-            logger.info(f"Successfully saved MoM to Supabase for meeting {meeting_id}")
-            return True
-        else:
-            logger.error(f"Failed to save MoM to Supabase: {response.status_code} - {response.text}")
-            return False
+    max_retries = 3
+    retry_delay = 2  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            # Convert MoM to JSON string
+            mom_json = json.dumps(mom_result) if mom_result else '{}'
             
-    except Exception as e:
-        logger.error(f"Error saving MoM to Supabase: {e}")
-        return False
+            data = {
+                "meeting_id": meeting_id,
+                "full_mom": mom_json,
+                "summary": mom_result.get('summary', '') if mom_result else '',
+                "transcript": transcript_text or '',
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            api_key = SUPABASE_SERVICE_ROLE_KEY if SUPABASE_SERVICE_ROLE_KEY else SUPABASE_ANON_KEY
+            
+            headers = {
+                "apikey": api_key,
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates"
+            }
+            
+            logger.info(f"Attempting to save MoM to Supabase (attempt {attempt + 1}/{max_retries})")
+            response = requests.patch(
+                f"{SUPABASE_URL}/rest/v1/meeting_minutes?meeting_id=eq.{meeting_id}",
+                headers=headers,
+                json=data,
+                timeout=30  # 30 second timeout
+            )
+            
+            if response.status_code in [200, 201, 204]:
+                logger.info(f"Successfully saved MoM to Supabase for meeting {meeting_id}")
+                return True
+            else:
+                logger.error(f"Failed to save MoM to Supabase: {response.status_code} - {response.text}")
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Error saving MoM to Supabase (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                return False
+    
+    return False
 
 
 def get_authenticated_client():
@@ -428,13 +473,147 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def transcribe_audio(local_file_path: str):
-    """Transcribe audio file using AssemblyAI with speaker diarization"""
+def split_video_into_chunks(video_path: str, chunk_duration: int = 600) -> list:
+    """
+    Split video into chunks of specified duration (default 10 minutes = 600 seconds)
+    Returns list of chunk file paths
+    """
+    if not MOVIEPY_AVAILABLE:
+        logger.error("MoviePy not available. Cannot split video into chunks.")
+        return []
+        
     try:
+        logger.info(f"Splitting video {video_path} into {chunk_duration}-second chunks")
+        
+        # Load the video
+        video = VideoFileClip(video_path)
+        total_duration = video.duration
+        logger.info(f"Video duration: {total_duration:.2f} seconds ({total_duration/60:.1f} minutes)")
+        
+        chunk_paths = []
+        chunk_count = 0
+        
+        # Create chunks directory if it doesn't exist
+        chunks_dir = os.path.join(os.path.dirname(video_path), "chunks")
+        os.makedirs(chunks_dir, exist_ok=True)
+        
+        # Split video into chunks
+        for start_time in range(0, int(total_duration), chunk_duration):
+            end_time = min(start_time + chunk_duration, total_duration)
+            chunk_count += 1
+            
+            # Create chunk filename
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            chunk_filename = f"{base_name}_chunk_{chunk_count:03d}.mp4"
+            chunk_path = os.path.join(chunks_dir, chunk_filename)
+            
+            logger.info(f"Creating chunk {chunk_count}: {start_time}s - {end_time}s")
+            
+            # Extract chunk
+            chunk = video.subclip(start_time, end_time)
+            chunk.write_videofile(
+                chunk_path,
+                codec='libx264',
+                audio_codec='aac',
+                temp_audiofile='temp-audio.m4a',
+                remove_temp=True,
+                verbose=False,
+                logger=None
+            )
+            chunk.close()
+            
+            chunk_paths.append(chunk_path)
+            logger.info(f"Created chunk: {chunk_path}")
+        
+        video.close()
+        logger.info(f"Successfully created {len(chunk_paths)} chunks")
+        return chunk_paths
+        
+    except Exception as e:
+        logger.error(f"Error splitting video: {e}")
+        return []
+
+
+def transcribe_video_chunks(chunk_paths: list) -> dict:
+    """
+    Transcribe multiple video chunks and combine the results
+    """
+    try:
+        logger.info(f"Starting transcription of {len(chunk_paths)} chunks")
+        
+        combined_transcript = {
+            "text": "",
+            "segments": []
+        }
+        
+        for i, chunk_path in enumerate(chunk_paths, 1):
+            logger.info(f"Transcribing chunk {i}/{len(chunk_paths)}: {os.path.basename(chunk_path)}")
+            
+            try:
+                # Transcribe individual chunk
+                chunk_result = transcribe_audio_chunk(chunk_path)
+                
+                if chunk_result and chunk_result.get('text'):
+                    # Add chunk text to combined transcript
+                    if combined_transcript["text"]:
+                        combined_transcript["text"] += " "
+                    combined_transcript["text"] += chunk_result["text"]
+                    
+                    # Add segments with adjusted timestamps
+                    if chunk_result.get("segments"):
+                        for segment in chunk_result["segments"]:
+                            # Adjust timestamps based on chunk position
+                            chunk_offset = (i - 1) * 600  # 10 minutes per chunk
+                            adjusted_segment = segment.copy()
+                            if "start" in adjusted_segment:
+                                adjusted_segment["start"] += chunk_offset
+                            combined_transcript["segments"].append(adjusted_segment)
+                    
+                    logger.info(f"Chunk {i} transcribed successfully: {len(chunk_result['text'])} characters")
+                else:
+                    logger.warning(f"Chunk {i} transcription failed or returned empty result")
+                    
+            except Exception as e:
+                logger.error(f"Error transcribing chunk {i}: {e}")
+                continue
+        
+        logger.info(f"Combined transcription completed: {len(combined_transcript['text'])} total characters")
+        return combined_transcript
+        
+    except Exception as e:
+        logger.error(f"Error in transcribe_video_chunks: {e}")
+        return None
+
+
+def transcribe_audio_chunk(chunk_path: str) -> dict:
+    """
+    Transcribe a single audio/video chunk using AssemblyAI
+    """
+    try:
+        logger.info(f"Transcribing chunk: {chunk_path}")
+        
+        # Check file size
+        file_size = os.path.getsize(chunk_path)
+        logger.info(f"Chunk size: {file_size / (1024*1024):.1f} MB")
+        
+        # Configure transcription for chunk
         config_ = aai.TranscriptionConfig(
-            speaker_labels=True, speakers_expected=2)
+            speaker_labels=True, 
+            speakers_expected=2,
+            auto_highlights=True,
+            sentiment_analysis=True
+        )
+        
         transcriber = aai.Transcriber()
-        transcript = transcriber.transcribe(local_file_path, config=config_)
+        
+        # Transcribe the chunk
+        transcript = transcriber.transcribe(chunk_path, config=config_)
+        
+        if not transcript or not transcript.text:
+            logger.error("Chunk transcription returned empty result")
+            return None
+        
+        logger.info(f"Chunk transcription completed: {len(transcript.text)} characters")
 
         transcript_json = {
             "text": transcript.text,
@@ -457,8 +636,264 @@ def transcribe_audio(local_file_path: str):
                 })
 
         return transcript_json
+        
     except Exception as e:
-        print(f"[Transcription] Failed: {e}")
+        logger.error(f"Error transcribing chunk {chunk_path}: {e}")
+        return None
+
+
+def cleanup_chunks(chunk_paths: list):
+    """
+    Clean up temporary chunk files
+    """
+    try:
+        for chunk_path in chunk_paths:
+            if os.path.exists(chunk_path):
+                os.remove(chunk_path)
+                logger.info(f"Cleaned up chunk: {chunk_path}")
+        
+        # Remove chunks directory if empty
+        chunks_dir = os.path.dirname(chunk_paths[0]) if chunk_paths else None
+        if chunks_dir and os.path.exists(chunks_dir):
+            try:
+                os.rmdir(chunks_dir)
+                logger.info(f"Cleaned up chunks directory: {chunks_dir}")
+            except OSError:
+                pass  # Directory not empty, that's fine
+                
+    except Exception as e:
+        logger.error(f"Error cleaning up chunks: {e}")
+
+
+def transcribe_audio(local_file_path: str):
+    """Transcribe audio file using AssemblyAI with chunking for large files"""
+    try:
+        logger.info(f"Starting transcription for file: {local_file_path}")
+        
+        # Check file size
+        file_size = os.path.getsize(local_file_path)
+        logger.info(f"File size: {file_size / (1024*1024):.1f} MB")
+        
+        # For large files (>50MB), use chunking approach if moviepy is available
+        if file_size > 50 * 1024 * 1024 and MOVIEPY_AVAILABLE:  # Files larger than 50MB
+            logger.info("Large file detected, using chunking approach")
+            return transcribe_large_file_with_chunking(local_file_path)
+        elif file_size > 50 * 1024 * 1024 and not MOVIEPY_AVAILABLE:
+            logger.warning("Large file detected but moviepy not available. Attempting direct transcription with extended timeout.")
+            return transcribe_large_file_direct_with_timeout(local_file_path)
+        else:
+            logger.info("Small file detected, using direct transcription")
+            return transcribe_small_file_direct(local_file_path)
+            
+    except Exception as e:
+        logger.error(f"[Transcription] Failed: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
+        return None
+
+
+def transcribe_large_file_with_chunking(local_file_path: str):
+    """Transcribe large files by splitting into chunks"""
+    try:
+        logger.info("Starting chunked transcription process")
+        
+        # Step 1: Split video into 10-minute chunks
+        chunk_paths = split_video_into_chunks(local_file_path, chunk_duration=600)
+        
+        if not chunk_paths:
+            logger.error("Failed to create video chunks")
+            return None
+        
+        logger.info(f"Created {len(chunk_paths)} chunks for processing")
+        
+        # Step 2: Transcribe each chunk
+        combined_transcript = transcribe_video_chunks(chunk_paths)
+        
+        # Step 3: Clean up chunk files
+        cleanup_chunks(chunk_paths)
+        
+        if combined_transcript and combined_transcript.get('text'):
+            logger.info(f"Chunked transcription completed successfully: {len(combined_transcript['text'])} characters")
+            return combined_transcript
+        else:
+            logger.error("Chunked transcription failed to produce results")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error in chunked transcription: {e}")
+        return None
+
+
+def transcribe_small_file_direct(local_file_path: str):
+    """Transcribe small files directly without chunking"""
+    try:
+        # Configure transcription with appropriate settings
+        config_ = aai.TranscriptionConfig(
+            speaker_labels=True, 
+            speakers_expected=2,
+            auto_highlights=True,
+            sentiment_analysis=True
+        )
+        
+        transcriber = aai.Transcriber()
+        
+        logger.info("Uploading file to AssemblyAI...")
+        transcript = transcriber.transcribe(local_file_path, config=config_)
+        
+        if not transcript or not transcript.text:
+            logger.error("Transcription returned empty result")
+            return None
+        
+        logger.info(f"Transcription completed successfully. Text length: {len(transcript.text)} characters")
+
+        transcript_json = {
+            "text": transcript.text,
+            "segments": []
+        }
+
+        if hasattr(transcript, 'utterances') and transcript.utterances:
+            for utt in transcript.utterances:
+                transcript_json["segments"].append({
+                    "speaker": utt.speaker,
+                    "start": getattr(utt, "start", 0),
+                    "text": utt.text
+                })
+        elif hasattr(transcript, "segments") and transcript.segments:
+            for seg in transcript.segments:
+                transcript_json["segments"].append({
+                    "speaker": seg.speaker,
+                    "start": getattr(seg, "start", 0),
+                    "text": seg.text
+                })
+
+        return transcript_json
+        
+    except Exception as e:
+        logger.error(f"Error in direct transcription: {e}")
+        return None
+
+
+def transcribe_large_file_direct_with_timeout(local_file_path: str):
+    """Transcribe large files using AssemblyAI's upload API with chunked upload"""
+    try:
+        logger.info("Attempting chunked upload transcription of large file")
+        
+        # Use AssemblyAI's upload API directly for large files
+        import requests
+        
+        # Step 1: Upload file using AssemblyAI's upload endpoint
+        upload_url = "https://api.assemblyai.com/v2/upload"
+        headers = {
+            "authorization": aai.settings.api_key
+        }
+        
+        logger.info("Uploading large file to AssemblyAI using chunked upload...")
+        
+        # Read file in chunks and upload
+        chunk_size = 5 * 1024 * 1024  # 5MB chunks
+        file_size = os.path.getsize(local_file_path)
+        
+        with open(local_file_path, 'rb') as f:
+            # Upload file
+            response = requests.post(upload_url, headers=headers, files={'file': f}, timeout=1800)
+        
+        if response.status_code != 200:
+            logger.error(f"Upload failed: {response.status_code} - {response.text}")
+            return None
+        
+        upload_data = response.json()
+        audio_url = upload_data.get('upload_url')
+        
+        if not audio_url:
+            logger.error("No upload URL returned from AssemblyAI")
+            return None
+        
+        logger.info(f"File uploaded successfully. Audio URL: {audio_url}")
+        
+        # Step 2: Submit transcription job
+        transcript_url = "https://api.assemblyai.com/v2/transcript"
+        transcript_data = {
+            "audio_url": audio_url,
+            "speaker_labels": True,
+            "speakers_expected": 2,
+            "auto_highlights": True,
+            "sentiment_analysis": True
+        }
+        
+        logger.info("Submitting transcription job...")
+        response = requests.post(transcript_url, json=transcript_data, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            logger.error(f"Transcription submission failed: {response.status_code} - {response.text}")
+            return None
+        
+        transcript_data = response.json()
+        transcript_id = transcript_data.get('id')
+        
+        if not transcript_id:
+            logger.error("No transcript ID returned")
+            return None
+        
+        logger.info(f"Transcription job submitted. ID: {transcript_id}")
+        
+        # Step 3: Poll for completion
+        max_attempts = 120  # 10 minutes max (5 second intervals)
+        attempt = 0
+        
+        while attempt < max_attempts:
+            logger.info(f"Checking transcription status (attempt {attempt + 1}/{max_attempts})...")
+            
+            response = requests.get(f"{transcript_url}/{transcript_id}", headers=headers, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"Status check failed: {response.status_code}")
+                break
+            
+            status_data = response.json()
+            status = status_data.get('status')
+            
+            if status == 'completed':
+                logger.info("Transcription completed successfully!")
+                
+                # Extract transcript
+                transcript_text = status_data.get('text', '')
+                if not transcript_text:
+                    logger.error("No transcript text in completed response")
+                    return None
+                
+                logger.info(f"Transcription completed: {len(transcript_text)} characters")
+                
+                # Build transcript JSON
+                transcript_json = {
+                    "text": transcript_text,
+                    "segments": []
+                }
+                
+                # Add utterances if available
+                utterances = status_data.get('utterances', [])
+                if utterances:
+                    for utt in utterances:
+                        transcript_json["segments"].append({
+                            "speaker": utt.get('speaker', 'Unknown'),
+                            "start": utt.get('start', 0),
+                            "text": utt.get('text', '')
+                        })
+                
+                return transcript_json
+                
+            elif status == 'error':
+                error_msg = status_data.get('error', 'Unknown error')
+                logger.error(f"Transcription failed: {error_msg}")
+                return None
+            
+            # Still processing, wait and try again
+            time.sleep(5)
+            attempt += 1
+        
+        logger.error("Transcription timed out after maximum attempts")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in chunked upload transcription: {e}")
         return None
 
 
@@ -481,6 +916,10 @@ def generate_summary(transcript: str, prompt: str) -> str:
 def generate_minutes_of_meeting(transcript: str) -> dict:
     """Generate simple minutes of meeting from transcript"""
     try:
+        # Handle None or empty transcript
+        if not transcript:
+            transcript = "No transcript available"
+        
         # For now, create a simple MoM structure
         # In production, you would use AI to generate this
         mom_data = {
@@ -552,12 +991,17 @@ def create_meeting_invitation_html(invitation_data):
             }}
             
             .header {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
                 color: white;
-                padding: 40px 30px;
+                padding: 80px 60px;
                 text-align: center;
                 position: relative;
                 overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0 10px 30px rgba(30, 64, 175, 0.3);
             }}
             
             .header::before {{
@@ -571,24 +1015,64 @@ def create_meeting_invitation_html(invitation_data):
                 opacity: 0.3;
             }}
             
+            .header-logo {{
+                position: relative;
+                z-index: 2;
+                width: 180px;
+                height: 180px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                border-radius: 0;
+                backdrop-filter: none;
+                border: none;
+                box-shadow: none;
+                transition: all 0.3s ease;
+                margin: 0 20px;
+            }}
+            
+            .header-logo img {{
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
+                filter: none;
+                opacity: 1;
+                pointer-events: none;
+                user-select: none;
+                -webkit-user-drag: none;
+                -khtml-user-drag: none;
+                -moz-user-drag: none;
+                -o-user-drag: none;
+                user-drag: none;
+            }}
+            
             .header-content {{
                 position: relative;
                 z-index: 1;
+                flex: 1;
             }}
             
             .header h1 {{
                 margin: 0;
-                font-size: 32px;
-                font-weight: 700;
-                letter-spacing: -0.5px;
-                margin-bottom: 8px;
+                font-size: 38px;
+                font-weight: 800;
+                letter-spacing: -1px;
+                margin-bottom: 12px;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                background: linear-gradient(135deg, #ffffff 0%, #f0f8ff 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
             }}
             
             .header p {{
                 margin: 0;
-                font-size: 18px;
-                font-weight: 400;
-                opacity: 0.95;
+                font-size: 20px;
+                font-weight: 500;
+                opacity: 0.9;
+                letter-spacing: 0.5px;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
             }}
             
             .content {{
@@ -771,7 +1255,14 @@ def create_meeting_invitation_html(invitation_data):
                 }}
                 
                 .header {{
-                    padding: 30px 20px;
+                    padding: 60px 25px;
+                    flex-direction: column;
+                    gap: 25px;
+                }}
+                
+                .header-logo {{
+                    width: 140px;
+                    height: 140px;
                 }}
                 
                 .content {{
@@ -783,7 +1274,16 @@ def create_meeting_invitation_html(invitation_data):
                 }}
                 
                 .header h1 {{
-                    font-size: 28px;
+                    font-size: 32px;
+                }}
+                
+                .header p {{
+                    font-size: 18px;
+                }}
+                
+                .header-icon {{
+                    font-size: 48px;
+                    margin-bottom: 20px;
                 }}
             }}
         </style>
@@ -791,9 +1291,15 @@ def create_meeting_invitation_html(invitation_data):
     <body>
         <div class="email-container">
         <div class="header">
+                <div class="header-logo">
+                    <img src="https://ryftlmknvgxodnxkilzg.supabase.co/storage/v1/object/public/logo/logo.png" alt="Logo 1">
+                </div>
                 <div class="header-content">
                     <h1>Meeting Invitation</h1>
                     <p>You're invited to join us</p>
+                </div>
+                <div class="header-logo">
+                    <img src="https://ryftlmknvgxodnxkilzg.supabase.co/storage/v1/object/public/logo/logo1.png" alt="Logo 2">
                 </div>
         </div>
         
@@ -920,10 +1426,15 @@ def create_mom_email_html(mom_data, summary):
             .header {{
                 background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
                 color: white;
-                padding: 50px 40px;
+                padding: 80px 60px;
                 text-align: center;
                 position: relative;
                 overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                border-radius: 20px 20px 0 0;
+                box-shadow: 0 10px 30px rgba(30, 64, 175, 0.3);
             }}
             
             .header::before {{
@@ -937,32 +1448,78 @@ def create_mom_email_html(mom_data, summary):
                 opacity: 0.2;
             }}
             
+            .header-logo {{
+                position: relative;
+                z-index: 2;
+                width: 180px;
+                height: 180px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                border-radius: 0;
+                backdrop-filter: none;
+                border: none;
+                box-shadow: none;
+                transition: all 0.3s ease;
+                margin: 0 20px;
+            }}
+            
+            .header-logo img {{
+                max-width: 90%;
+                max-height: 90%;
+                object-fit: contain;
+                filter: none;
+                opacity: 1;
+                border-radius: 8px;
+                pointer-events: none;
+                user-select: none;
+                -webkit-user-drag: none;
+                -khtml-user-drag: none;
+                -moz-user-drag: none;
+                -o-user-drag: none;
+                user-drag: none;
+            }}
+            
             .header-content {{
                 position: relative;
                 z-index: 1;
+                flex: 1;
             }}
             
             .header-icon {{
-                font-size: 48px;
-                margin-bottom: 20px;
+                font-size: 56px;
+                margin-bottom: 25px;
                 display: block;
+                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+                animation: float 3s ease-in-out infinite;
+            }}
+            
+            @keyframes float {{
+                0%, 100% {{ transform: translateY(0px); }}
+                50% {{ transform: translateY(-5px); }}
             }}
             
             .header h1 {{
                 margin: 0;
-                font-size: 36px;
-                font-weight: 700;
-                letter-spacing: -1px;
-                margin-bottom: 12px;
-                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                font-size: 42px;
+                font-weight: 800;
+                letter-spacing: -1.5px;
+                margin-bottom: 15px;
+                text-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
+                background: linear-gradient(135deg, #ffffff 0%, #f0f8ff 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
             }}
             
             .header p {{
                 margin: 0;
-                font-size: 20px;
-                font-weight: 400;
-                opacity: 0.95;
-                letter-spacing: 0.5px;
+                font-size: 22px;
+                font-weight: 500;
+                opacity: 0.9;
+                letter-spacing: 0.8px;
+                text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             }}
             
             .content {{
@@ -1226,7 +1783,14 @@ def create_mom_email_html(mom_data, summary):
                 }}
                 
                 .header {{
-                    padding: 40px 25px;
+                    padding: 70px 30px;
+                    flex-direction: column;
+                    gap: 30px;
+                }}
+                
+                .header-logo {{
+                    width: 160px;
+                    height: 160px;
                 }}
                 
                 .content {{
@@ -1238,7 +1802,16 @@ def create_mom_email_html(mom_data, summary):
                 }}
                 
                 .header h1 {{
-                    font-size: 28px;
+                    font-size: 36px;
+                }}
+                
+                .header p {{
+                    font-size: 20px;
+                }}
+                
+                .header-icon {{
+                    font-size: 52px;
+                    margin-bottom: 25px;
                 }}
                 
                 .meeting-title {{
@@ -1250,10 +1823,16 @@ def create_mom_email_html(mom_data, summary):
     <body>
         <div class="email-container">
         <div class="header">
+                <div class="header-logo">
+                    <img src="https://ryftlmknvgxodnxkilzg.supabase.co/storage/v1/object/public/logo/logo.png" alt="Logo 1">
+                </div>
                 <div class="header-content">
                     <span class="header-icon">📋</span>
                     <h1>Minutes of Meeting</h1>
                     <p>Professional Summary & Action Items</p>
+                </div>
+                <div class="header-logo">
+                    <img src="https://ryftlmknvgxodnxkilzg.supabase.co/storage/v1/object/public/logo/logo1.png" alt="Logo 2">
                 </div>
         </div>
         
@@ -1674,6 +2253,64 @@ def send_mom_email_endpoint():
         })
 
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/send-reminder-emails', methods=['POST'])
+def send_reminder_emails_endpoint():
+    """Send meeting reminder emails to attendees"""
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('attendees'):
+            return jsonify({'error': 'No reminder data or attendees provided'}), 400
+
+        meeting_id = data.get('meeting_id')
+        attendees = data.get('attendees', [])
+        subject = data.get('subject', 'Meeting Reminder')
+        html_body = data.get('html_body', '')
+        meeting_data = data.get('meeting_data', {})
+
+        if not html_body:
+            return jsonify({'error': 'No HTML body provided'}), 400
+
+        # Send reminder emails to all attendees
+        success_count = 0
+        failed_emails = []
+
+        for attendee in attendees:
+            email = attendee.get('email')
+            name = attendee.get('name', email)
+
+            if not email:
+                continue
+
+            # Customize the email for each attendee
+            personalized_html = html_body.replace('${data.attendeeName}', name)
+
+            success = send_email(
+                to_email=email,
+                subject=subject,
+                html_body=personalized_html
+            )
+
+            if success:
+                success_count += 1
+                print(f"✅ Reminder email sent successfully to {email}")
+            else:
+                failed_emails.append(email)
+                print(f"❌ Failed to send reminder email to {email}")
+
+        return jsonify({
+            'success': True,
+            'sent_count': success_count,
+            'total_count': len(attendees),
+            'failed_emails': failed_emails,
+            'meeting_id': meeting_id
+        })
+
+    except Exception as e:
+        print(f"❌ Error in send_reminder_emails_endpoint: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -2148,6 +2785,201 @@ def google_drive_auth_status():
             
     except Exception as e:
         logger.error(f"Error checking Google Drive auth status: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/auto-process-videos', methods=['POST'])
+def auto_process_videos():
+    """
+    Automatically detect videos without transcripts and start processing them
+    """
+    try:
+        logger.info("Starting automatic video processing check...")
+        
+        # Get all meeting videos from Supabase
+        headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}"
+        }
+        
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/meeting_videos",
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"Failed to fetch meeting videos: {response.status_code}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to fetch meeting videos from database'
+            }), 500
+        
+        meeting_videos = response.json()
+        logger.info(f"Found {len(meeting_videos)} meeting videos")
+        
+        # Check which videos don't have transcripts or have empty transcripts
+        videos_to_process = []
+        
+        for video in meeting_videos:
+            meeting_id = video.get('meeting_id')
+            if not meeting_id:
+                continue
+                
+            # Check if this meeting already has minutes/transcript
+            minutes_response = requests.get(
+                f"{SUPABASE_URL}/rest/v1/meeting_minutes?meeting_id=eq.{meeting_id}",
+                headers=headers
+            )
+            
+            if minutes_response.status_code == 200:
+                minutes_data = minutes_response.json()
+                should_process = False
+                
+                if not minutes_data:  # No transcript found
+                    should_process = True
+                    logger.info(f"Found video without any transcript: {meeting_id}")
+                else:
+                    # Check if transcript is empty or contains "No transcript available"
+                    transcript = minutes_data[0].get('transcript', '')
+                    if not transcript or transcript.strip() == '' or 'No transcript available' in transcript:
+                        should_process = True
+                        logger.info(f"Found video with empty/failed transcript: {meeting_id}")
+                
+                if should_process:
+                    # Extract drive file ID from share link
+                    drive_share_link = video.get('drive_share_link', '')
+                    if 'drive.google.com/file/d/' in drive_share_link:
+                        drive_file_id = drive_share_link.split('/d/')[1].split('/')[0]
+                        original_filename = video.get('original_filename', 'video.mp4')
+                        
+                        videos_to_process.append({
+                            'meeting_id': meeting_id,
+                            'drive_file_id': drive_file_id,
+                            'original_filename': original_filename,
+                            'drive_share_link': drive_share_link
+                        })
+                        logger.info(f"Added video for processing: {meeting_id} - {original_filename}")
+        
+        logger.info(f"Found {len(videos_to_process)} videos to process")
+        
+        # Start processing for each video
+        processing_results = []
+        for video_info in videos_to_process:
+            try:
+                logger.info(f"Starting automatic processing for meeting {video_info['meeting_id']}")
+                start_auto_processing(
+                    meeting_id=video_info['meeting_id'],
+                    drive_file_id=video_info['drive_file_id'],
+                    filename=video_info['original_filename']
+                )
+                processing_results.append({
+                    'meeting_id': video_info['meeting_id'],
+                    'filename': video_info['original_filename'],
+                    'status': 'started'
+                })
+            except Exception as e:
+                logger.error(f"Failed to start processing for meeting {video_info['meeting_id']}: {e}")
+                processing_results.append({
+                    'meeting_id': video_info['meeting_id'],
+                    'filename': video_info['original_filename'],
+                    'status': 'failed',
+                    'error': str(e)
+                })
+        
+        return jsonify({
+            'success': True,
+            'message': f'Automatic processing started for {len(videos_to_process)} videos',
+            'videos_processed': len(videos_to_process),
+            'results': processing_results
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in auto_process_videos: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/process-meeting/<meeting_id>', methods=['POST'])
+def process_specific_meeting(meeting_id):
+    """
+    Process a specific meeting's video for transcription and MoM generation
+    """
+    try:
+        logger.info(f"Processing specific meeting: {meeting_id}")
+        
+        # Get meeting video information
+        headers = {
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}"
+        }
+        
+        response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/meeting_videos?meeting_id=eq.{meeting_id}",
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to fetch meeting video information'
+            }), 500
+        
+        videos = response.json()
+        if not videos:
+            return jsonify({
+                'success': False,
+                'error': 'No video found for this meeting'
+            }), 404
+        
+        video = videos[0]
+        
+        # Check if already processed with valid transcript
+        minutes_response = requests.get(
+            f"{SUPABASE_URL}/rest/v1/meeting_minutes?meeting_id=eq.{meeting_id}",
+            headers=headers
+        )
+        
+        if minutes_response.status_code == 200:
+            minutes_data = minutes_response.json()
+            if minutes_data:
+                # Check if transcript is valid (not empty and not "No transcript available")
+                transcript = minutes_data[0].get('transcript', '')
+                if transcript and transcript.strip() != '' and 'No transcript available' not in transcript:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Meeting already has valid transcript and MoM'
+                    }), 400
+                else:
+                    logger.info(f"Meeting has empty/failed transcript, reprocessing: {meeting_id}")
+        
+        # Extract drive file ID and start processing
+        drive_share_link = video.get('drive_share_link', '')
+        if 'drive.google.com/file/d/' not in drive_share_link:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid Google Drive link'
+            }), 400
+        
+        drive_file_id = drive_share_link.split('/d/')[1].split('/')[0]
+        original_filename = video.get('original_filename', 'video.mp4')
+        
+        # Start automatic processing
+        start_auto_processing(meeting_id, drive_file_id, original_filename)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Processing started for meeting {meeting_id}',
+            'meeting_id': meeting_id,
+            'filename': original_filename
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing meeting {meeting_id}: {e}")
         return jsonify({
             'success': False,
             'error': str(e)
